@@ -29,8 +29,9 @@ from typing import Any, ClassVar, Dict, Optional, Sequence, TypeVar, Union
 
 from munch import Munch as Bunch
 import pydantic
+from pydantic import Field
 
-from trulens_eval.util import Class
+from trulens_eval.util import Class, SerialModel, obj_id_of_obj
 from trulens_eval.util import Function
 from trulens_eval.util import FunctionOrMethod
 from trulens_eval.util import GetItemOrAttribute
@@ -498,3 +499,26 @@ class App(AppDefinition):
             "use trulens_eval.schema.AppDefinition instead."
         )
         super().__init__(*args, **kwargs)
+
+
+EventID = str
+
+
+class EventInfo(SerialModel):
+    category: str
+    content: str
+    metadata: Dict[str, str] = Field(default_factory=dict)
+    ts: datetime = Field(default_factory=datetime.now)
+
+
+class Event(EventInfo):
+    event_id: EventID
+    record_id: RecordID
+    idx: int
+
+    def __init__(self, **kwargs):
+        if "event_id" not in kwargs:
+            kwargs["event_id"] = "__TBD__"
+        super().__init__(**kwargs)
+        if self.event_id == "__TBD__":
+            self.event_id = obj_id_of_obj(self.dict())

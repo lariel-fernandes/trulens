@@ -18,7 +18,7 @@ from trulens_eval.database import orm
 from trulens_eval.database.migrations import upgrade_db
 from trulens_eval.database.utils import for_all_methods, run_before, is_legacy_sqlite, is_memory_sqlite, \
     check_db_revision, migrate_legacy_sqlite
-from trulens_eval.schema import RecordID, FeedbackResultID, FeedbackDefinitionID, FeedbackResultStatus
+from trulens_eval.schema import RecordID, FeedbackResultID, FeedbackDefinitionID, FeedbackResultStatus, Event
 from trulens_eval.util import JSON
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,22 @@ class SqlAlchemyDB(DB):
     def reload_engine(self):
         self.engine = create_engine(**self.engine_params)
         self.Session = sessionmaker(self.engine, **self.session_params)
+
+    def insert_events(self, events: Iterable[schema.Event]):
+        with self.Session.begin() as session:
+            session.add_all((orm.Event.parse(e) for e in events))
+
+    def get_events(self, record_id: RecordID) -> pd.DataFrame:
+        with self.Session.begin() as session:
+            stmt = select(orm.Event).filter_by(record_id=record_id)
+            events = (row[0] for row in session.execute(stmt))
+            cols = ["idx", "ts", "category", "content"]
+            df = pd.DataFrame(
+                data=([getattr(e, c) for c in cols] for e in events),
+                columns=cols,
+            )
+            df["ts"] = df["ts"].apply(datetime.fromtimestamp)
+            return df
 
     @classmethod
     def from_db_url(cls, url: str) -> "SqlAlchemyDB":

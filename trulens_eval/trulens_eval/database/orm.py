@@ -1,6 +1,7 @@
+import json
 from sqlite3 import Connection as SQLite3Connection
 
-from sqlalchemy import Column, Text, VARCHAR, ForeignKey, Float, event, Engine
+from sqlalchemy import Column, Text, VARCHAR, ForeignKey, Float, event, Engine, Integer
 from sqlalchemy.orm import declarative_base, relationship
 
 from trulens_eval import schema
@@ -109,3 +110,27 @@ def _set_sqlite_pragma(dbapi_connection, _):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON;")
         cursor.close()
+
+
+class Event(Base):
+    __tablename__ = "events"
+
+    event_id = Column(VARCHAR(256), nullable=False, primary_key=True)
+    record_id = Column(VARCHAR(256), ForeignKey("records.record_id"), nullable=False)
+    idx = Column(Integer, nullable=False)
+    category = Column(Text, nullable=False)
+    content = Column(Text, nullable=False)
+    _metadata = Column(TYPE_JSON, nullable=False)
+    ts = Column(TYPE_TIMESTAMP, nullable=False)
+
+    @classmethod
+    def parse(cls, obj: schema.Event):
+        return cls(
+            event_id=obj.event_id,
+            record_id=obj.record_id,
+            idx=obj.idx,
+            category=obj.category,
+            content=obj.content,
+            _metadata=json.dumps(obj.metadata),
+            ts=obj.ts.timestamp(),
+        )
