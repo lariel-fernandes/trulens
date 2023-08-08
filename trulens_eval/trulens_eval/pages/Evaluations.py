@@ -1,28 +1,29 @@
 import json
-from typing import Iterable, List, Tuple
+from typing import Iterable, Tuple
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import streamlit as st
 from st_aggrid import AgGrid
 from st_aggrid.grid_options_builder import GridOptionsBuilder
 from st_aggrid.shared import GridUpdateMode
 from st_aggrid.shared import JsCode
-import streamlit as st
+from streamlit_chat import message
 from streamlit_javascript import st_javascript
 from ux.add_logo import add_logo
 from ux.styles import CATEGORY
 
 from trulens_eval import Tru
 from trulens_eval.app import ComponentView
-from trulens_eval.app import instrumented_component_views
 from trulens_eval.app import LLM
 from trulens_eval.app import Other
 from trulens_eval.app import Prompt
+from trulens_eval.app import instrumented_component_views
 from trulens_eval.react_components.record_viewer import record_viewer
 from trulens_eval.schema import Record
 from trulens_eval.schema import Select
-from trulens_eval.util import jsonify
 from trulens_eval.util import JSONPath
+from trulens_eval.util import jsonify
 from trulens_eval.ux.components import draw_call
 from trulens_eval.ux.components import draw_llm_info
 from trulens_eval.ux.components import draw_metadata
@@ -261,6 +262,15 @@ else:
             classes: Iterable[Tuple[JSONPath, ComponentView]
                              ] = list(instrumented_component_views(app_json))
             classes_map = {path: view for path, view in classes}
+
+            df_events = lms.get_events(record.record_id)
+            if len(df_events) > 0:
+                st.header("Events")
+                for _, row in df_events.iterrows():
+                    name = {"Input": "user", "AgentFinish": "assistant"}.get(row.category, row.category)
+                    with st.chat_message(name):
+                        st.write(f"**{row.category}**")
+                        st.write(row.content)
 
             st.header('Timeline')
             val = record_viewer(record_json, app_json)
