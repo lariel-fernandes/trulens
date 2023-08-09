@@ -179,8 +179,10 @@ else:
             allow_unsafe_jscode=True
         )
 
-        selected_rows = data['selected_rows']
-        selected_rows = pd.DataFrame(selected_rows)
+        if rec_id := st.session_state.get("selected_record_id"):
+            selected_rows = evaluations_df.loc[evaluations_df.record_id == rec_id]
+        else:
+            selected_rows = pd.DataFrame(data['selected_rows'])
 
         if len(selected_rows) == 0:
             st.write("Hint: select a row to display details of a record")

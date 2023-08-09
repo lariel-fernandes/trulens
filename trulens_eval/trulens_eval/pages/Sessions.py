@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import streamlit as st
+from streamlit_extras.switch_page_button import switch_page
 from ux.add_logo import add_logo
 
 from trulens_eval import Tru
@@ -33,10 +34,16 @@ def format_ts(_ts: datetime) -> str:
 
 if session_id:
     df_msg = lms.get_messages(session_id)
-    for _, row in df_msg.iterrows():
+    for idx, row in df_msg.iterrows():
         with st.chat_message(row.source, avatar=UNICODE_GEAR if row.source == "system" else None):
-            show_meta = st.button(f"**{row.label}** - *{format_ts(row.ts)}*")
-            st.write(row.content)
+            col1, col2 = st.columns(2, gap="large")
+            with col1:
+                show_meta = st.button(f"**{row.label}** - *{format_ts(row.ts)}*")
+                st.write(row.content)
             if show_meta:
                 with st.expander("Details"):
                     st.write(row.metadata_)
+            with col2:
+                if st.button("See record page ↗️", key=f"see-record-{idx}"):
+                    st.session_state["selected_record_id"] = row.record_id
+                    switch_page("Evaluations")
