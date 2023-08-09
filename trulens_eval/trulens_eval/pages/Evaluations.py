@@ -180,7 +180,7 @@ else:
         )
 
         if rec_id := st.session_state.get("selected_record_id"):
-            selected_rows = evaluations_df.loc[evaluations_df.record_id == rec_id]
+            selected_rows = evaluations_df.loc[evaluations_df.record_id == rec_id].reset_index(drop=True)
         else:
             selected_rows = pd.DataFrame(data['selected_rows'])
 
