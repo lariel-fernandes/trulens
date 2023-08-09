@@ -11,7 +11,7 @@ from langchain.schema import AgentFinish, AgentAction
 from langchain.tools import BaseTool, Tool
 
 from trulens_eval.instruments import InstrumentBuilder
-from trulens_eval.schema import MessageInfo, MessageSource, Record
+from trulens_eval.schema import MessageInfo, MessageSource, Record, MessageContentType
 from trulens_eval.sessions import SessionableApp, start_session, MessagesExtractor
 from trulens_eval.util import jsonify, JSON
 
@@ -73,12 +73,18 @@ class OpenAiFunctionsMessagesExtractor(MessagesExtractor):
                 yield MessageInfo(
                     source=MessageSource.ASSISTANT,
                     label=f"Action[{call.rets.tool}]",
-                    content=coerce_dict_to_str(call.rets.tool_input),
+                    content=coerce_dict_to_str(call.rets.tool_input, truncate_single_key=False),
                     metadata_={
                         **self.metadata,
+                        "log": call.rets.log.strip(),
                         "tool_info": self.tools.get(call.rets.tool)
                     },
                     ts=call.perf.end_time,
+                    content_type=(
+                        MessageContentType.JSON
+                        if isinstance(call.rets.tool_input, (dict, list))
+                        else MessageContentType.TEXT
+                    )
                 )
             elif isinstance(call.rets, AgentFinish):
                 yield MessageInfo(
@@ -124,13 +130,13 @@ def fq_class_name(cls: Type) -> str:
     return f"{cls.__module__}.{cls.__name__}"
 
 
-def coerce_dict_to_str(d: Union[dict, str]) -> str:
+def coerce_dict_to_str(d: Union[dict, str], truncate_single_key: bool = True) -> str:
     if isinstance(d, str):
         return d
     if isinstance(d, dict):
         if len(d) == 0:
             return ""
-        if len(d) == 1:
+        if len(d) == 1 and truncate_single_key:
             return list(d.values())[0]
         return json.dumps(d)
     raise ValueError(f"Cannot coerce dict to str: {d}")

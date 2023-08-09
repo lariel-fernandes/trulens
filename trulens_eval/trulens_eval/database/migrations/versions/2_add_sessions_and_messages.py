@@ -2,7 +2,7 @@
 
 Revision ID: 2
 Revises: 1
-Create Date: 2023-08-09 17:25:50.858504
+Create Date: 2023-08-09 23:19:27.210575
 
 """
 from alembic import op
@@ -36,6 +36,7 @@ def upgrade() -> None:
     sa.Column('content', sa.Text(), nullable=False),
     sa.Column('metadata_', sa.Text(), nullable=False),
     sa.Column('ts', sa.Float(), nullable=False),
+    sa.Column('content_type', sa.Text(), nullable=False),
     sa.ForeignKeyConstraint(['session_id'], ['sessions.session_id'], ),
     sa.PrimaryKeyConstraint('message_id')
     )

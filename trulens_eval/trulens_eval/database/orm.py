@@ -145,6 +145,7 @@ class Message(Base):
     content = Column(Text, nullable=False)
     metadata_ = Column(TYPE_JSON, nullable=False)
     ts = Column(TYPE_TIMESTAMP, nullable=False)
+    content_type = Column(TYPE_ENUM, nullable=False)
 
     session = relationship("Session", back_populates="messages")
 
@@ -159,4 +160,5 @@ class Message(Base):
             content=obj.content,
             metadata_=json.dumps(obj.metadata_),
             ts=obj.ts.timestamp(),
+            content_type=obj.content_type.value,
         )

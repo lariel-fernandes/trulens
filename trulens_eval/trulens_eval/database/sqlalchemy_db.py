@@ -72,7 +72,7 @@ class SqlAlchemyDB(DB):
     def get_messages(self, session_id: schema.SessionID) -> pd.DataFrame:
         with self.Session.begin() as __session__:
             _session = __session__.query(orm.Session).filter_by(session_id=session_id).one()
-            cols = ["ts", "source", "label", "content", "metadata_", "record_id"]
+            cols = ["ts", "source", "label", "content", "metadata_", "record_id", "content_type"]
             df = pd.DataFrame(
                 data=([getattr(e, c) for c in cols] for e in _session.messages),
                 columns=cols,

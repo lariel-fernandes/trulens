@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 import streamlit as st
@@ -40,7 +41,7 @@ if session_id:
             col1, col2 = st.columns(2, gap="large")
             with col1:
                 show_meta = st.button(f"**{row.label}** - *{format_ts(row.ts)}*")
-                st.write(row.content)
+                st.write(json.loads(row.content) if row.content_type == "json" else row.content)
             if show_meta:
                 with st.expander("Details"):
                     st.write(row.metadata_)

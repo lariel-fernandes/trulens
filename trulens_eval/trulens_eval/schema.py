@@ -527,12 +527,18 @@ class MessageSource(Enum):
     ASSISTANT = "assistant"
 
 
+class MessageContentType(Enum):
+    TEXT = "text"
+    JSON = "json"
+
+
 class MessageInfo(SerialModel):
     source: MessageSource = MessageSource.NONE
     label: str
     content: str
     metadata_: JSON
     ts: datetime
+    content_type: MessageContentType = MessageContentType.TEXT
 
 
 class Message(MessageInfo):
