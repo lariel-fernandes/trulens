@@ -33,6 +33,7 @@ def format_ts(_ts: datetime) -> str:
 
 
 if session_id:
+    st.subheader("Messages")
     df_msg = lms.get_messages(session_id)
     for idx, row in df_msg.iterrows():
         with st.chat_message(row.source, avatar=UNICODE_GEAR if row.source == "system" else None):
