@@ -6,10 +6,12 @@ import logging
 from typing import Optional, Dict, Union, Iterable
 
 from langchain.agents import AgentExecutor
+from langchain.agents import AgentType
 from langchain.schema import AgentFinish, AgentAction
 
 from trulens_eval.schema import MessageInfo, MessageSource, Record
 from trulens_eval.sessions import SessionableApp, start_session, MessagesExtractor
+from trulens_eval.util import jsonify
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +41,13 @@ class TruAgent(SessionableApp):
 
 class OpenAiFunctionsMessagesExtractor(MessagesExtractor):
     metadata: Dict[str, str]
+    tools: Dict[str, dict]
 
-    def __init__(self, metadata: Optional[Dict[str, str]] = None):
+    def __init__(self, agent: AgentExecutor, metadata: Optional[Dict[str, str]] = None, **kwargs):
         metadata = metadata or {}
-        metadata["agent_type"] = "OPENAI_FUNCTIONS"
-        super().__init__(metadata=metadata)
+        metadata["agent_type"] = AgentType.OPENAI_FUNCTIONS
+        tools = {tool.name: jsonify(tool) for tool in agent.tools}
+        super().__init__(metadata=metadata, tools=tools, **kwargs)
 
     def __call__(self, record: Record, error: Optional[Exception]) -> Iterable[MessageInfo]:
         for idx, call in enumerate(record.calls):
@@ -68,7 +72,10 @@ class OpenAiFunctionsMessagesExtractor(MessagesExtractor):
                     source=MessageSource.ASSISTANT,
                     label=f"Action[{call.rets.tool}]",
                     content=coerce_dict_to_str(call.rets.tool_input),
-                    metadata_=self.metadata,
+                    metadata_={
+                        **self.metadata,
+                        "tool": self.tools.get(call.rets.tool)
+                    },
                     ts=call.perf.end_time,
                 )
             elif isinstance(call.rets, AgentFinish):

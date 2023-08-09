@@ -35,5 +35,8 @@ if session_id:
     df_msg = lms.get_messages(session_id)
     for _, row in df_msg.iterrows():
         with st.chat_message(row.source, avatar=UNICODE_GEAR if row.source == "system" else None):
-            st.write(f"**{row.label}** - *{format_ts(row.ts)}*")
+            show_meta = st.button(f"**{row.label}** - *{format_ts(row.ts)}*")
             st.write(row.content)
+            if show_meta:
+                with st.expander("Details"):
+                    st.write(row.metadata_)

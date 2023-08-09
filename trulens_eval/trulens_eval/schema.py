@@ -20,28 +20,27 @@ feature information about the encoded object types in the dictionary under the
 util.py:CLASS_INFO key.
 """
 
+import logging
 from abc import ABC
-from abc import abstractmethod
 from datetime import datetime
 from enum import Enum
-import logging
 from typing import Any, ClassVar, Dict, Optional, Sequence, TypeVar, Union
 
-from munch import Munch as Bunch
 import pydantic
+from munch import Munch as Bunch
 from pydantic import Field
 
-from trulens_eval.util import Class, SerialModel, obj_id_of_obj
+from trulens_eval.util import Class
 from trulens_eval.util import Function
 from trulens_eval.util import FunctionOrMethod
 from trulens_eval.util import GetItemOrAttribute
 from trulens_eval.util import JSON
-from trulens_eval.util import jsonify
 from trulens_eval.util import JSONPath
 from trulens_eval.util import Method
-from trulens_eval.util import obj_id_of_obj
 from trulens_eval.util import SerialModel
 from trulens_eval.util import WithClassInfo
+from trulens_eval.util import jsonify
+from trulens_eval.util import obj_id_of_obj
 
 T = TypeVar("T")
 
@@ -532,7 +531,7 @@ class MessageInfo(SerialModel):
     source: MessageSource = MessageSource.NONE
     label: str
     content: str
-    metadata_: Dict[str, str]
+    metadata_: JSON
     ts: datetime
 
 
