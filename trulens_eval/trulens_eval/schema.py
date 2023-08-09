@@ -501,24 +501,49 @@ class App(AppDefinition):
         super().__init__(*args, **kwargs)
 
 
-EventID = str
+SessionID = str
+
+MessageID = str
 
 
-class EventInfo(SerialModel):
-    category: str
-    content: str
-    metadata: Dict[str, str] = Field(default_factory=dict)
-    ts: datetime = Field(default_factory=datetime.now)
-
-
-class Event(EventInfo):
-    event_id: EventID
-    record_id: RecordID
-    idx: int
+class Session(SerialModel):
+    session_id: SessionID
+    app_id: Optional[AppID] = None
+    metadata_: Dict[str, str] = Field(default_factory=dict)
+    start_ts: datetime = Field(default_factory=datetime.now)
+    end_ts: Optional[datetime] = None
 
     def __init__(self, **kwargs):
-        if "event_id" not in kwargs:
-            kwargs["event_id"] = "__TBD__"
+        if "session_id" not in kwargs:
+            kwargs["session_id"] = "__TBD__"
         super().__init__(**kwargs)
-        if self.event_id == "__TBD__":
-            self.event_id = obj_id_of_obj(self.dict())
+        if self.session_id == "__TBD__":
+            self.session_id = obj_id_of_obj(self.dict(), prefix="session")
+
+
+class MessageSource(Enum):
+    NONE = "none"
+    USER = "user"
+    SYSTEM = "system"
+    ASSISTANT = "assistant"
+
+
+class MessageInfo(SerialModel):
+    source: MessageSource = MessageSource.NONE
+    label: str
+    content: str
+    metadata_: Dict[str, str]
+    ts: datetime
+
+
+class Message(MessageInfo):
+    message_id: MessageID
+    session_id: SessionID
+    record_id: Optional[RecordID] = None
+
+    def __init__(self, **kwargs):
+        if "message_id" not in kwargs:
+            kwargs["message_id"] = "__TBD__"
+        super().__init__(**kwargs)
+        if self.message_id == "__TBD__":
+            self.message_id = obj_id_of_obj(self.dict(), prefix="msg")

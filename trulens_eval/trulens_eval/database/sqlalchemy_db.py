@@ -12,13 +12,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
 from trulens_eval import schema
-from trulens_eval.db import DB
-from trulens_eval.db_migration import MIGRATION_UNKNOWN_STR
 from trulens_eval.database import orm
 from trulens_eval.database.migrations import upgrade_db
 from trulens_eval.database.utils import for_all_methods, run_before, is_legacy_sqlite, is_memory_sqlite, \
     check_db_revision, migrate_legacy_sqlite
-from trulens_eval.schema import RecordID, FeedbackResultID, FeedbackDefinitionID, FeedbackResultStatus, Event
+from trulens_eval.db import DB
+from trulens_eval.db_migration import MIGRATION_UNKNOWN_STR
+from trulens_eval.schema import RecordID, FeedbackResultID, FeedbackDefinitionID, FeedbackResultStatus
 from trulens_eval.util import JSON
 
 logger = logging.getLogger(__name__)
@@ -50,21 +50,36 @@ class SqlAlchemyDB(DB):
         self.engine = create_engine(**self.engine_params)
         self.Session = sessionmaker(self.engine, **self.session_params)
 
-    def insert_events(self, events: Iterable[schema.Event]):
-        with self.Session.begin() as session:
-            session.add_all((orm.Event.parse(e) for e in events))
+    def insert_session(self, session: schema.Session):
+        with self.Session.begin() as __session__:
+            __session__.add(orm.Session.parse(session))
 
-    def get_events(self, record_id: RecordID) -> pd.DataFrame:
+    def update_session(self, session_id: schema.SessionID, **kwargs):
+        with self.Session.begin() as __session__:
+            _session = __session__.query(orm.Session).filter_by(session_id=session_id)
+            for key, val in kwargs.items():
+                setattr(_session, key, val)
+
+    def get_sessions(self) -> List[str]:
+        with self.Session.begin() as __session__:
+            stmt = select(orm.Session.session_id)
+            return [row[0] for row in __session__.execute(stmt)]
+
+    def insert_messages(self, messages: Iterable[schema.Message]):
         with self.Session.begin() as session:
-            stmt = select(orm.Event).filter_by(record_id=record_id)
-            events = (row[0] for row in session.execute(stmt))
-            cols = ["idx", "ts", "category", "content"]
+            session.add_all((orm.Message.parse(e) for e in messages))
+
+    def get_messages(self, session_id: schema.SessionID) -> pd.DataFrame:
+        with self.Session.begin() as __session__:
+            _session = __session__.query(orm.Session).filter_by(session_id=session_id).one()
+            cols = ["ts", "source", "label", "content", "metadata_"]
             df = pd.DataFrame(
-                data=([getattr(e, c) for c in cols] for e in events),
+                data=([getattr(e, c) for c in cols] for e in _session.messages),
                 columns=cols,
             )
             df["ts"] = df["ts"].apply(datetime.fromtimestamp)
-            return df
+            df["metadata_"] = df["metadata_"].apply(json.loads)
+            return df.sort_values("ts")
 
     @classmethod
     def from_db_url(cls, url: str) -> "SqlAlchemyDB":

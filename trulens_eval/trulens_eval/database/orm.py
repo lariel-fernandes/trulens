@@ -1,7 +1,7 @@
 import json
 from sqlite3 import Connection as SQLite3Connection
 
-from sqlalchemy import Column, Text, VARCHAR, ForeignKey, Float, event, Engine, Integer
+from sqlalchemy import Column, Text, VARCHAR, ForeignKey, Float, event, Engine
 from sqlalchemy.orm import declarative_base, relationship
 
 from trulens_eval import schema
@@ -112,25 +112,51 @@ def _set_sqlite_pragma(dbapi_connection, _):
         cursor.close()
 
 
-class Event(Base):
-    __tablename__ = "events"
+class Session(Base):
+    __tablename__ = "sessions"
 
-    event_id = Column(VARCHAR(256), nullable=False, primary_key=True)
-    record_id = Column(VARCHAR(256), ForeignKey("records.record_id"), nullable=False)
-    idx = Column(Integer, nullable=False)
-    category = Column(Text, nullable=False)
-    content = Column(Text, nullable=False)
-    _metadata = Column(TYPE_JSON, nullable=False)
-    ts = Column(TYPE_TIMESTAMP, nullable=False)
+    session_id = Column(VARCHAR(256), nullable=False, primary_key=True)
+    app_id = Column(VARCHAR(256), ForeignKey("apps.app_id"), nullable=True)
+    metadata_ = Column(TYPE_JSON, nullable=False)
+    start_ts = Column(TYPE_TIMESTAMP, nullable=False)
+    end_ts = Column(TYPE_TIMESTAMP, nullable=True)
+
+    messages = relationship("Message", cascade="all,delete")
 
     @classmethod
-    def parse(cls, obj: schema.Event):
+    def parse(cls, obj: schema.Session):
         return cls(
-            event_id=obj.event_id,
+            session_id=obj.session_id,
+            app_id=obj.app_id,
+            metadata_=json.dumps(obj.metadata_),
+            start_ts=obj.start_ts.timestamp(),
+            end_ts=obj.end_ts.timestamp() if obj.end_ts is not None else None,
+        )
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    message_id = Column(VARCHAR(256), nullable=False, primary_key=True)
+    session_id = Column(VARCHAR(256), ForeignKey("sessions.session_id"), nullable=False)
+    record_id = Column(VARCHAR(256), nullable=True)  # ForeignKey("records.record_id")
+    source = Column(TYPE_ENUM, nullable=False)
+    label = Column(Text, nullable=False)
+    content = Column(Text, nullable=False)
+    metadata_ = Column(TYPE_JSON, nullable=False)
+    ts = Column(TYPE_TIMESTAMP, nullable=False)
+
+    session = relationship("Session", back_populates="messages")
+
+    @classmethod
+    def parse(cls, obj: schema.Message):
+        return cls(
+            message_id=obj.message_id,
+            session_id=obj.session_id,
             record_id=obj.record_id,
-            idx=obj.idx,
-            category=obj.category,
+            source=obj.source.value,
+            label=obj.label,
             content=obj.content,
-            _metadata=json.dumps(obj.metadata),
+            metadata_=json.dumps(obj.metadata_),
             ts=obj.ts.timestamp(),
         )
