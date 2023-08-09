@@ -249,7 +249,7 @@ stack for specific frames:
   instead of contextvar management.
 
 """
-
+from collections import defaultdict
 from datetime import datetime
 import inspect
 from inspect import BoundArguments
@@ -259,7 +259,7 @@ import os
 from pprint import PrettyPrinter
 import threading as th
 import traceback
-from typing import Callable, Dict, Iterable, Optional, Sequence, Set
+from typing import Callable, Dict, Iterable, Optional, Sequence, Set, Type
 
 from pydantic import BaseModel
 
@@ -268,7 +268,7 @@ from trulens_eval.schema import Perf
 from trulens_eval.schema import Query
 from trulens_eval.schema import RecordAppCall
 from trulens_eval.schema import RecordAppCallMethod
-from trulens_eval.util import _safe_getattr
+from trulens_eval.util import _safe_getattr, SerialModel
 from trulens_eval.util import get_local_in_call_stack
 from trulens_eval.util import jsonify
 from trulens_eval.util import Method
@@ -664,3 +664,47 @@ class Instrument(object):
             logger.debug(
                 f"{query}: Do not know how to instrument object of type {cls}."
             )
+
+
+class InstrumentBuilder(SerialModel):
+    root_methods: Optional[Set[Callable]] = set()
+    modules: Set[str] = set()
+    classes: Set[Type] = set()
+    methods: Dict[str, Set[Type]] = defaultdict(set)
+
+    def __init__(self, **kwargs):
+        methods = kwargs.pop("methods", {})
+        super().__init__(**kwargs)
+        for name, classes in methods.items():
+            self.methods[name] = self.methods[name].union(classes)
+
+    def with_obj_methods(self, obj, *methods: str):
+        self.modules.add(obj.__module__)
+        self.classes.add(obj.__class__)
+        for name in methods:
+            self.methods[name].add(obj.__class__)
+        return self
+
+    def with_root_methods(self, *methods: Callable):
+        self.root_methods = self.root_methods.union(methods)
+        return self
+
+    def build(self) -> Instrument:
+        return Instrument(
+            root_methods=self.root_methods,
+            modules=self.modules,
+            classes=self.classes,
+            methods={
+                name: instance_checker(classes)
+                for name, classes in self.methods.items()
+            },
+        )
+
+
+def instance_checker(classes: Iterable[Type]):
+    classes = tuple(classes)
+
+    def check(obj) -> bool:
+        return isinstance(obj, classes)
+
+    return check

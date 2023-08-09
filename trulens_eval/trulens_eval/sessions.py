@@ -7,7 +7,7 @@ import pandas as pd
 from pydantic import Field
 
 from trulens_eval.app import App
-from trulens_eval.instruments import Instrument
+from trulens_eval.instruments import InstrumentBuilder
 from trulens_eval.provider_apis import Endpoint
 from trulens_eval.schema import Session, RecordAppCall, Cost, Record, Message, MessageInfo, SessionID
 from trulens_eval.util import FunctionOrMethod, Class, SerialModel
@@ -31,16 +31,14 @@ class SessionableApp(App):
 
     messages_extractor: Optional[MessagesExtractor] = None
 
-    def __init__(self, app: Any, instrument_conf: Optional[dict] = None, **kwargs):
+    def __init__(self, app: Any, instrument_builder: Optional[InstrumentBuilder] = None, **kwargs):
         super().update_forward_refs()
+        if instrument_builder is None:
+            instrument_builder = InstrumentBuilder().with_obj_methods(app, "__call__")
+
         kwargs['app'] = app
         kwargs['root_class'] = Class.of_object(app)
-        instrument_conf = instrument_conf or {
-            "modules": {app.__module__},
-            "classes": {app.__class__},
-            "methods": {"__call__": lambda o: isinstance(o, app.__class__)},
-        }
-        kwargs['instrument'] = Instrument(root_methods={self.call_with_record}, **instrument_conf)
+        kwargs['instrument'] = instrument_builder.with_root_methods(self.call_with_record).build()
         super().__init__(**kwargs)
 
     def __call__(self, *args, **kwargs):
