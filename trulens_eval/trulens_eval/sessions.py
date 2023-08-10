@@ -55,12 +55,9 @@ class SessionRunner:
         return out, rec
 
     def _handle_record(self, record: Record):
+        self.session_manager.app.db.assign_record_to_session(record.record_id, self.session.session_id)
         self.session_manager.app.db.insert_messages(self._extract_messages(record))
 
     def _extract_messages(self, record: Record) -> Iterable[Message]:
         for msg_info in self.session_manager.messages_extractor(record):
-            yield Message(
-                record_id=record.record_id,
-                session_id=self.session.session_id,
-                **msg_info.dict()
-            )
+            yield Message(record_id=record.record_id, **msg_info.dict())

@@ -507,7 +507,6 @@ MessageID = str
 
 class Session(SerialModel):
     session_id: SessionID
-    app_id: Optional[AppID] = None
     metadata_: Dict[str, str] = Field(default_factory=dict)
     start_ts: datetime = Field(default_factory=datetime.now)
     end_ts: Optional[datetime] = None
@@ -544,7 +543,6 @@ class MessageInfo(SerialModel):
 
 class Message(MessageInfo):
     message_id: MessageID
-    session_id: SessionID
     record_id: RecordID
 
     def __init__(self, **kwargs):

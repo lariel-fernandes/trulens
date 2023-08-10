@@ -7,7 +7,7 @@ from typing import List, Tuple, Sequence, Optional, Iterable, Union
 import numpy as np
 import pandas as pd
 from pydantic import Field
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, update
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
 
@@ -55,15 +55,19 @@ class SqlAlchemyDB(DB):
             __session__.add(orm.Session.parse(session))
 
     def update_session(self, session_id: schema.SessionID, **kwargs):
-        with self.Session.begin() as __session__:
-            _session = __session__.query(orm.Session).filter_by(session_id=session_id)
-            for key, val in kwargs.items():
-                setattr(_session, key, val)
+        with self.Session.begin() as conn:
+            stmt = update(orm.Session).where(orm.Session.session_id == session_id).values(kwargs)
+            conn.execute(stmt)
 
-    def get_sessions(self) -> List[str]:
+    def get_session_ids(self) -> List[str]:
         with self.Session.begin() as __session__:
             stmt = select(orm.Session.session_id)
             return [row[0] for row in __session__.execute(stmt)]
+
+    def assign_record_to_session(self, record_id: schema.RecordID, session_id: schema.SessionID):
+        with self.Session.begin() as conn:
+            _rec = conn.query(orm.Record).filter_by(record_id=record_id).one()
+            _rec.session_id = session_id
 
     def insert_messages(self, messages: Iterable[schema.Message]):
         with self.Session.begin() as session:
@@ -78,24 +82,35 @@ class SqlAlchemyDB(DB):
 
             results = (row[0] for row in conn.execute(q))
 
-            session_cols = ["session_id"]
-            msg_cols = ["ts", "call_idx", "source", "label", "content", "metadata_", "record_id", "content_type"]
+            session_cols = ["session_id", "start_ts", "end_ts"]
+            rec_cols = ["record_id", "ts"]
+            msg_cols = ["msg_ts", "call_idx", "source", "label", "content", "metadata_", "content_type"]
 
             def _get_messages(_sessions: Iterable[orm.Session]) -> Iterable[orm.Message]:
                 for _session in _sessions:
                     _session_cols = [getattr(_session, col) for col in session_cols]
-                    for _msg in _session.messages:
-                        _msg_cols = [getattr(_msg, col) for col in msg_cols]
-                        yield _session_cols + _msg_cols
+                    for _rec in _session.records:
+                        _rec_cols = [getattr(_rec, col) for col in rec_cols]
+                        for _msg in _rec.messages:
+                            _msg_cols = [getattr(_msg, col) for col in msg_cols]
+                            yield _session_cols + _rec_cols + _msg_cols
 
             df = pd.DataFrame(
                 data=_get_messages(results),
-                columns=session_cols + msg_cols,
+                columns=session_cols + rec_cols + msg_cols,
             )
 
-            df["ts"] = df["ts"].apply(datetime.fromtimestamp)
+            for ts_col in ["ts", "start_ts", "end_ts", "msg_ts"]:
+                df[ts_col] = df[ts_col].apply(lambda ts: datetime.fromtimestamp(ts) if ts is not None else None)
+
+            df.rename(inplace=True, columns={
+                "ts": "rec_ts",
+                "start_ts": "session_start",
+                "end_ts": "session_end",
+            })
+
             df["metadata_"] = df["metadata_"].apply(json.loads)
-            return df.sort_values(["session_id", "ts", "call_idx"])
+            return df.sort_values(["session_start", "rec_ts", "call_idx", "msg_ts"])
 
     @classmethod
     def from_db_url(cls, url: str) -> "SqlAlchemyDB":

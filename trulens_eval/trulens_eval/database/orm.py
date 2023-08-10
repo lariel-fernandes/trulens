@@ -52,9 +52,17 @@ class Record(Base):
     ts = Column(TYPE_TIMESTAMP, nullable=False)
     cost_json = Column(TYPE_JSON, nullable=False)
     perf_json = Column(TYPE_JSON, nullable=False)
+    session_id = Column(VARCHAR(256), nullable=True)
 
     app = relationship("AppDefinition", back_populates="records")
     feedback_results = relationship("FeedbackResult", cascade="all,delete")
+
+    session = relationship(
+        "Session",
+        primaryjoin='Record.session_id == foreign(Session.session_id)',
+        back_populates="records",
+    )
+    messages = relationship("Message", cascade="all,delete")
 
     @classmethod
     def parse(cls, obj: schema.Record) -> "Record":
@@ -104,30 +112,20 @@ class FeedbackResult(Base):
         )
 
 
-@event.listens_for(Engine, "connect")
-def _set_sqlite_pragma(dbapi_connection, _):
-    if isinstance(dbapi_connection, SQLite3Connection):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON;")
-        cursor.close()
-
-
 class Session(Base):
     __tablename__ = "sessions"
 
     session_id = Column(VARCHAR(256), nullable=False, primary_key=True)
-    app_id = Column(VARCHAR(256), ForeignKey("apps.app_id"), nullable=False)
     metadata_ = Column(TYPE_JSON, nullable=False)
     start_ts = Column(TYPE_TIMESTAMP, nullable=False)
     end_ts = Column(TYPE_TIMESTAMP, nullable=True)
 
-    messages = relationship("Message", cascade="all,delete")
+    records = relationship("Record", primaryjoin='foreign(Record.session_id) == Session.session_id')
 
     @classmethod
     def parse(cls, obj: schema.Session):
         return cls(
             session_id=obj.session_id,
-            app_id=obj.app_id,
             metadata_=json.dumps(obj.metadata_),
             start_ts=obj.start_ts.timestamp(),
             end_ts=obj.end_ts.timestamp() if obj.end_ts is not None else None,
@@ -138,30 +136,35 @@ class Message(Base):
     __tablename__ = "messages"
 
     message_id = Column(VARCHAR(256), nullable=False, primary_key=True)
-    session_id = Column(VARCHAR(256), ForeignKey("sessions.session_id"), nullable=False)
-    record_id = Column(VARCHAR(256), nullable=True)
-    # TODO: make record_id a ForeignKey, but then the message cannot be inserted before the record
+    record_id = Column(VARCHAR(256), ForeignKey("records.record_id"), nullable=True)
     source = Column(TYPE_ENUM, nullable=False)
     label = Column(Text, nullable=False)
     content = Column(Text, nullable=False)
     metadata_ = Column(TYPE_JSON, nullable=False)
-    ts = Column(TYPE_TIMESTAMP, nullable=False)
+    msg_ts = Column(TYPE_TIMESTAMP, nullable=False)
     call_idx = Column(Integer, nullable=True)
     content_type = Column(TYPE_ENUM, nullable=False)
 
-    session = relationship("Session", back_populates="messages")
+    record = relationship("Record", back_populates="messages")
 
     @classmethod
     def parse(cls, obj: schema.Message):
         return cls(
             message_id=obj.message_id,
-            session_id=obj.session_id,
             record_id=obj.record_id,
             source=obj.source.value,
             label=obj.label,
             content=obj.content,
             metadata_=json.dumps(obj.metadata_),
-            ts=obj.ts.timestamp(),
+            msg_ts=obj.ts.timestamp(),
             call_idx=obj.call_idx,
             content_type=obj.content_type.value,
         )
+
+
+@event.listens_for(Engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, _):
+    if isinstance(dbapi_connection, SQLite3Connection):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON;")
+        cursor.close()
