@@ -69,17 +69,33 @@ class SqlAlchemyDB(DB):
         with self.Session.begin() as session:
             session.add_all((orm.Message.parse(e) for e in messages))
 
-    def get_messages(self, session_id: schema.SessionID) -> pd.DataFrame:
-        with self.Session.begin() as __session__:
-            _session = __session__.query(orm.Session).filter_by(session_id=session_id).one()
-            cols = ["ts", "source", "label", "content", "metadata_", "record_id", "content_type"]
+    def get_messages(self, *session_ids: schema.SessionID) -> pd.DataFrame:
+        with self.Session.begin() as conn:
+            q = select(orm.Session)
+
+            if session_ids:
+                q = q.filter(orm.Session.session_id.in_(session_ids))
+
+            results = (row[0] for row in conn.execute(q))
+
+            session_cols = ["session_id"]
+            msg_cols = ["ts", "call_idx", "source", "label", "content", "metadata_", "record_id", "content_type"]
+
+            def _get_messages(_sessions: Iterable[orm.Session]) -> Iterable[orm.Message]:
+                for _session in _sessions:
+                    _session_cols = [getattr(_session, col) for col in session_cols]
+                    for _msg in _session.messages:
+                        _msg_cols = [getattr(_msg, col) for col in msg_cols]
+                        yield _session_cols + _msg_cols
+
             df = pd.DataFrame(
-                data=([getattr(e, c) for c in cols] for e in _session.messages),
-                columns=cols,
+                data=_get_messages(results),
+                columns=session_cols + msg_cols,
             )
+
             df["ts"] = df["ts"].apply(datetime.fromtimestamp)
             df["metadata_"] = df["metadata_"].apply(json.loads)
-            return df.sort_values("ts")
+            return df.sort_values(["session_id", "ts", "call_idx"])
 
     @classmethod
     def from_db_url(cls, url: str) -> "SqlAlchemyDB":

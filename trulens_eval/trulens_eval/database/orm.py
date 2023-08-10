@@ -1,7 +1,7 @@
 import json
 from sqlite3 import Connection as SQLite3Connection
 
-from sqlalchemy import Column, Text, VARCHAR, ForeignKey, Float, event, Engine
+from sqlalchemy import Column, Text, VARCHAR, ForeignKey, Float, event, Engine, Integer
 from sqlalchemy.orm import declarative_base, relationship
 
 from trulens_eval import schema
@@ -116,7 +116,7 @@ class Session(Base):
     __tablename__ = "sessions"
 
     session_id = Column(VARCHAR(256), nullable=False, primary_key=True)
-    app_id = Column(VARCHAR(256), ForeignKey("apps.app_id"), nullable=True)
+    app_id = Column(VARCHAR(256), ForeignKey("apps.app_id"), nullable=False)
     metadata_ = Column(TYPE_JSON, nullable=False)
     start_ts = Column(TYPE_TIMESTAMP, nullable=False)
     end_ts = Column(TYPE_TIMESTAMP, nullable=True)
@@ -139,12 +139,14 @@ class Message(Base):
 
     message_id = Column(VARCHAR(256), nullable=False, primary_key=True)
     session_id = Column(VARCHAR(256), ForeignKey("sessions.session_id"), nullable=False)
-    record_id = Column(VARCHAR(256), nullable=True)  # ForeignKey("records.record_id")
+    record_id = Column(VARCHAR(256), nullable=True)
+    # TODO: make record_id a ForeignKey, but then the message cannot be inserted before the record
     source = Column(TYPE_ENUM, nullable=False)
     label = Column(Text, nullable=False)
     content = Column(Text, nullable=False)
     metadata_ = Column(TYPE_JSON, nullable=False)
     ts = Column(TYPE_TIMESTAMP, nullable=False)
+    call_idx = Column(Integer, nullable=True)
     content_type = Column(TYPE_ENUM, nullable=False)
 
     session = relationship("Session", back_populates="messages")
@@ -160,5 +162,6 @@ class Message(Base):
             content=obj.content,
             metadata_=json.dumps(obj.metadata_),
             ts=obj.ts.timestamp(),
+            call_idx=obj.call_idx,
             content_type=obj.content_type.value,
         )

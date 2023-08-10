@@ -1,55 +1,43 @@
-"""
-# Basic input output instrumentation and monitoring.
-"""
 import json
 import logging
-from typing import Optional, Dict, Union, Iterable, Type
+from abc import ABC, abstractmethod
+from typing import Iterable, Dict, List
+from typing import Union, Type
 
-from langchain.agents import AgentExecutor
 from langchain.agents import AgentType
 from langchain.schema import AgentFinish, AgentAction
 from langchain.tools import BaseTool, Tool
+from pydantic import Field
 
-from trulens_eval.instruments import InstrumentBuilder
-from trulens_eval.schema import MessageInfo, MessageSource, Record, MessageContentType
-from trulens_eval.sessions import SessionableApp, start_session, MessagesExtractor
+from trulens_eval.schema import MessageSource, MessageContentType
+from trulens_eval.schema import Record, MessageInfo
+from trulens_eval.util import SerialModel
 from trulens_eval.util import jsonify, JSON
 
 logger = logging.getLogger(__name__)
 
 
-class TruAgent(SessionableApp):
-    app: AgentExecutor
+class MessagesExtractor(SerialModel, ABC):
 
-    def __init__(self, app: AgentExecutor, instrument_builder: Optional[InstrumentBuilder] = None, **kwargs):
-        instrument_builder = instrument_builder or InstrumentBuilder()
-        instrument_builder.with_obj_methods(app.agent, "plan", "aplan")
-
-        for tool in app.tools:
-            instrument_builder.with_obj_methods(tool, "_run", "_arun")
-
-        super().__init__(app, instrument_builder, **kwargs)
-
-    def __call__(self, *args, **kwargs):
-        return self.call_with_session(*args, **kwargs)[0]
-
-    def call_with_session(self, inputs: dict, metadata: Optional[Dict[str, str]] = None, **kwargs):
-        with start_session(self, metadata) as session_runner:
-            out, rec = session_runner.call_with_record(inputs=inputs, metadata=metadata, **kwargs)
-            return out, rec, session_runner.session
+    @abstractmethod
+    def __call__(self, record: Record) -> Iterable[MessageInfo]:
+        raise NotImplementedError()
 
 
 class OpenAiFunctionsMessagesExtractor(MessagesExtractor):
-    metadata: Dict[str, str]
     tools: Dict[str, dict]
+    metadata: Dict[str, str] = Field(default_factory=dict)
 
-    def __init__(self, agent: AgentExecutor, metadata: Optional[Dict[str, str]] = None, **kwargs):
-        metadata = metadata or {}
-        metadata["agent_type"] = AgentType.OPENAI_FUNCTIONS
-        tools = {tool.name: jsonify_tool(tool) for tool in agent.tools}
-        super().__init__(metadata=metadata, tools=tools, **kwargs)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.metadata["agent_type"] = AgentType.OPENAI_FUNCTIONS
 
-    def __call__(self, record: Record, error: Optional[Exception]) -> Iterable[MessageInfo]:
+    @classmethod
+    def from_tools(cls, tools: List[BaseTool], **kwargs):
+        tools = {tool.name: jsonify_tool(tool) for tool in tools}
+        return cls(tools=tools, **kwargs)
+
+    def __call__(self, record: Record) -> Iterable[MessageInfo]:
         for idx, call in enumerate(record.calls):
             if call.method().name not in ["plan", "aplan"]:
                 continue
@@ -60,6 +48,7 @@ class OpenAiFunctionsMessagesExtractor(MessagesExtractor):
                     content=coerce_dict_to_str(call.args["kwargs"]),
                     metadata_=self.metadata,
                     ts=call.perf.start_time,
+                    call_idx=idx,
                 )
             if steps := call.args["intermediate_steps"]:
                 yield MessageInfo(
@@ -68,6 +57,7 @@ class OpenAiFunctionsMessagesExtractor(MessagesExtractor):
                     content=steps[-1][1],
                     metadata_=self.metadata,
                     ts=call.perf.start_time,
+                    call_idx=idx,
                 )
             if isinstance(call.rets, AgentAction):
                 yield MessageInfo(
@@ -80,6 +70,7 @@ class OpenAiFunctionsMessagesExtractor(MessagesExtractor):
                         "tool_info": self.tools.get(call.rets.tool)
                     },
                     ts=call.perf.end_time,
+                    call_idx=idx,
                     content_type=(
                         MessageContentType.JSON
                         if isinstance(call.rets.tool_input, (dict, list))
@@ -93,16 +84,19 @@ class OpenAiFunctionsMessagesExtractor(MessagesExtractor):
                     content=coerce_dict_to_str(call.rets.return_values),
                     metadata_=self.metadata,
                     ts=call.perf.end_time,
+                    call_idx=idx,
                 )
             elif call.rets is not None:
                 raise ValueError(f"Cannot extract event from call returns: {call.rets}")
-        if error:
+        if record.main_error is not None and record.main_error != "None":
             yield MessageInfo(
                 source=MessageSource.SYSTEM,
                 label="Error",
-                content=repr(error),
+                content=coerce_dict_to_str(record.main_error),
                 metadata_=self.metadata,
                 ts=record.perf.end_time,
+                content_type=MessageContentType.JSON,
+                call_idx=None,
             )
 
 

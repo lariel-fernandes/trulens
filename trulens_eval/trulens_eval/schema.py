@@ -539,12 +539,13 @@ class MessageInfo(SerialModel):
     metadata_: JSON
     ts: datetime
     content_type: MessageContentType = MessageContentType.TEXT
+    call_idx: Optional[int]
 
 
 class Message(MessageInfo):
     message_id: MessageID
     session_id: SessionID
-    record_id: Optional[RecordID] = None
+    record_id: RecordID
 
     def __init__(self, **kwargs):
         if "message_id" not in kwargs:
