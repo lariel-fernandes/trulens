@@ -37,13 +37,17 @@ if session_id:
     st.subheader("Messages")
     df_session = lms.get_messages(session_id)
     for rec_id, df_msg in df_session.groupby("record_id", sort=False):
-        if st.button(f"Record ID: {rec_id} ↗️", key=f"see-record-{rec_id}"):
-            st.session_state["selected_record_id"] = rec_id
-            switch_page("Evaluations")
-        for _, row in df_msg.iterrows():
-            with st.chat_message(row.source, avatar=UNICODE_GEAR if row.source == "system" else None):
-                show_meta = st.button(f"**{row.label}** - *{format_ts(row.msg_ts)}*")
-                st.write(json.loads(row.content) if row.content_type == "json" else row.content)
-                if show_meta:
-                    with st.expander("Details"):
-                        st.write(row.metadata_)
+        col1, col2 = st.columns(2, gap="large")
+        with col2:
+            if st.button(f"Record ID: {rec_id} ↗️", key=f"see-record-{rec_id}"):
+                st.session_state["selected_record_id"] = rec_id
+                switch_page("Evaluations")
+        with col1:
+            for _, row in df_msg.iterrows():
+                with st.chat_message(row.source, avatar=UNICODE_GEAR if row.source == "system" else None):
+                    show_meta = st.button(f"**{row.label}** - *{format_ts(row.msg_ts)}*")
+                    st.write(json.loads(row.content) if row.content_type == "json" else row.content)
+                    if show_meta:
+                        with st.expander("Details"):
+                            st.write(row.metadata_)
+        st.markdown("---")
