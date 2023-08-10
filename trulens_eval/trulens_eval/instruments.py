@@ -249,15 +249,16 @@ stack for specific frames:
   instead of contextvar management.
 
 """
-import inspect
-import logging
-import os
-import threading as th
-import traceback
+
 from datetime import datetime
+import inspect
 from inspect import BoundArguments
 from inspect import signature
+import logging
+import os
 from pprint import PrettyPrinter
+import threading as th
+import traceback
 from typing import Callable, Dict, Iterable, Optional, Sequence, Set
 
 from pydantic import BaseModel
@@ -267,10 +268,10 @@ from trulens_eval.schema import Perf
 from trulens_eval.schema import Query
 from trulens_eval.schema import RecordAppCall
 from trulens_eval.schema import RecordAppCallMethod
-from trulens_eval.util import Method
 from trulens_eval.util import _safe_getattr
 from trulens_eval.util import get_local_in_call_stack
 from trulens_eval.util import jsonify
+from trulens_eval.util import Method
 
 logger = logging.getLogger(__name__)
 pp = PrettyPrinter()
